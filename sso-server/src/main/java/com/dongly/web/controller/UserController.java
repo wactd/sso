@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 public class UserController {
 
     private static final String TOKEN_NAME = "SSO_TOKEN";
+    private static final Integer MAX_AGE = 60 * 60;
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
@@ -51,13 +52,22 @@ public class UserController {
     }
 
     @GetMapping(value = "/token/{token}")
-    public Object getUserByToken(@PathVariable String token, String callback) {
+    public Object getUserByToken(HttpServletRequest request, HttpServletResponse response,
+                                 @PathVariable String token, String callback) {
         Boolean hasKey = redisTemplate.hasKey(token);
         ResultModel<Object> resultModel;
         if (hasKey) {
             BoundHashOperations<String, Object, Object> operations = redisTemplate.boundHashOps(token);
             operations.expire(1, TimeUnit.HOURS);
             resultModel = ResultModel.ok(operations.get("username"));
+            Cookie[] cookies = request.getCookies();
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if (TOKEN_NAME.equals(cookie.getName())) {
+                        cookie.setMaxAge(MAX_AGE);
+                    }
+                }
+            }
         } else {
             resultModel = ResultModel.error(null);
         }
@@ -92,7 +102,13 @@ public class UserController {
         Cookie cookie = new Cookie(TOKEN_NAME, token);
         cookie.setPath("/");
         cookie.setDomain("dongly.com");
-        cookie.setMaxAge(-1);
+        cookie.setMaxAge(MAX_AGE);
+        response.addCookie(cookie);
+
+        cookie = new Cookie(TOKEN_NAME, token);
+        cookie.setPath("/");
+        cookie.setDomain("xiaoxiao.com");
+        cookie.setMaxAge(60 * 60);
         response.addCookie(cookie);
         return ResultModel.ok(token);
     }
